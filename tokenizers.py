@@ -185,6 +185,6 @@ class DefaultTokenizer:
 
 if __name__ == '__main__':
     #quick how to
-    tok = DefaultTokenizer("the cat sleeps on the mat ?".split(),'<unk>',"<pad>",bos="<bos>",eos="<eos>")
+    tok = DefaultTokenizer(normalize_text("the cat sleeps on the mat?").split(),'<unk>',"<pad>",bos="<bos>",eos="<eos>")
     tok.save_pretrained("/tmp")
     tok = DefaultTokenizer.from_pretrained("/tmp")

@@ -70,9 +70,6 @@ class PytorchLanguageModel(nn.Module):
         loss_fnc  = nn.CrossEntropyLoss(ignore_index = self.pad_value)
         optimizer = optim.AdamW(self.parameters(),lr=LR)
 
-        if not os.path.isdir(outdir):
-            os.mkdir(outdir)
-
         min_loss = 100000000000000
         for e in range(epochs):
             loss_lst = []
@@ -329,7 +326,7 @@ class MarkovianLM(PytorchLanguageModel):
                         'emb_size': emb_size,
                         'hidden_size': hidden_size,
                         'pad_value': pad_value,
-                        'dropout':dropout}
+                        'dropout':dropout  }
 
 
     @staticmethod
@@ -401,10 +398,13 @@ The Lucky Strike smoker drinks orange juice.
 The Japanese smokes Parliaments.
 The Norwegian lives next to the blue house.
 """
+    model_dir = "zebra"
+    if not os.path.isdir(model_dir):
+        os.mkdir(model_dir)
 
     zebra       = tokenizers.normalize_text(zebra)
     segmenter   = tokenizers.DefaultTokenizer(zebra.split(),bos='<bos>',eos='<eos>')
-    segmenter.save_pretrained('zebra')
+    segmenter.save_pretrained(model_dir)
     dataset     = nlp_datasets.RandomAccessRawText([tokenizers.normalize_text(sent) for sent in zebra.split('\n') if sent and not sent.isspace()],segmenter)
     trainloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=segmenter.pad_batch)
     validloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=segmenter.pad_batch)
@@ -412,7 +412,7 @@ The Norwegian lives next to the blue house.
     model       = MarkovianLM(3,segmenter.vocab_size,64,32,pad_value=segmenter.pad_id)
     #model       = LstmLM(segmenter.vocab_size,64,64,pad_value=segmenter.pad_id)
     #model       = TransformerLM(segmenter.vocab_size, 128 , nlayers=2, nheads=4,pad_value=segmenter.pad_id, max_window_size=128, dropout=0.0)
-    model       = model.train_lm(trainloader,validloader,150,"zebra",LR=0.01,device="mps")
+    model       = model.train_lm(trainloader,validloader,150,model_dir,LR=0.001,device="mps")
     print('perplexity',model.validate_lm(validloader,perplexity=True))
     gen_idxes = model.generate(segmenter("The man who smokes Chesterfields"),eos_token_id=segmenter.eos_token_id)
     print(segmenter.decode(gen_idxes))
