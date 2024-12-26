@@ -1,0 +1,8 @@
+LR: 0.021470058732369002
+ctx_size: 5
+dropout: 0.3215474518382653
+emb_size: 128
+epochs: 20
+family: markovian
+train: datasets/zebra.txt
+valid: datasets/zebra.txt

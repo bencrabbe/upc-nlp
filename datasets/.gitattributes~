@@ -1,0 +1,6 @@
+1b.train.txt filter=lfs diff=lfs merge=lfs -text
+1b.valid.txt filter=lfs diff=lfs merge=lfs -text
+shakespeare.test.txt filter=lfs diff=lfs merge=lfs -text
+shakespeare.train.txt filter=lfs diff=lfs merge=lfs -text
+shakespeare.valid.txt filter=lfs diff=lfs merge=lfs -text
+1b.train.txt.gz filter=lfs diff=lfs merge=lfs -text
