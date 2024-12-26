@@ -7,7 +7,9 @@ import nlp_datasets
 import argparse
 from collections import Counter
 
-
+"""
+This script allows to pretrain a language model. It does basic hyperparam search and allows for full training once hyperparams are found
+"""
 
 def transformer(trial,model_dir,segmenter,trainloader,validloader,epochs,device):
     """
