@@ -1,6 +1,5 @@
 from importlib.metadata import pass_none
 
-import torch
 import yaml
 import os
 import optuna
@@ -12,7 +11,7 @@ from collections import Counter
 
 
 
-def transformer(trial,model_dir,segmenter,trainloader,validloader,ctx_size,epochs,device):
+def transformer(trial,model_dir,segmenter,trainloader,validloader,epochs,device):
     """
     Optuna setup for training and evaluating a recurrent model.
     Currently it cannot be run in parallel.
@@ -40,7 +39,7 @@ def transformer(trial,model_dir,segmenter,trainloader,validloader,ctx_size,epoch
 
 
 
-def recurrent(trial,model_dir,segmenter,trainloader,validloader,ctx_size,epochs,device):
+def recurrent(trial,model_dir,segmenter,trainloader,validloader,epochs,device):
     """
     Optuna setup for training and evaluating a recurrent model.
     Currently it cannot be run in parallel.
@@ -91,7 +90,6 @@ def markovian(trial,model_dir,segmenter,trainloader,validloader,ctx_size,epochs,
     return model.validate_lm(validloader,perplexity=True)
 
 
-
 if __name__ == '__main__':
 
     from torch.utils.data import DataLoader
@@ -101,24 +99,26 @@ if __name__ == '__main__':
     One can train a model with predefined hyperparameters values using a yaml parameter file given as config argument""")
     parser.add_argument('trainfile',help='path to training file')
     parser.add_argument('validfile',help='path to validation file')
-    parser.add_argument('-c','--config',help='path to the yaml config file')
-    parser.add_argument('-m','--model_name',help='path to the model dir')
+    parser.add_argument('-c','--config',default=None,help='path to the yaml config file')
+    parser.add_argument('-m','--model_name',default=None,help='path to the model dir')
     parser.add_argument('-d','--device',default='cpu',help='device identifier')
     parser.add_argument('-e','--epochs',default=20,type=int,help='num epochs for each trial')
     parser.add_argument('-f','--family',default='markovian',help='model family in {markovian,recurrent,transformer}')
     parser.add_argument('-b','--batch_size',default=8,type=int,help='batch size')
+    parser.add_argument('-n','--n_trials',default=20,type=int,help='Number of trials when searching for hyperparameters')
     parser.add_argument('--ctx_size',default=2,type=int,help='context size (for markovian models only)')
     parser.add_argument('--max_vocab_size',default=50000,type=int,help='maximum vocabulary size')
 
     args = parser.parse_args()
 
-    if not os.path.isdir(args.model_name):
+    if args.model_name and not os.path.isdir(args.model_name):
         os.mkdir(args.model_name)
 
     with open(args.trainfile) as train:
         traintext = tokenizers.normalize_text(train.read())
     with open(args.validfile) as valid:
         validtext = tokenizers.normalize_text(valid.read())
+
 
     counter     = Counter(traintext.split())
     print('True vocabulary size:',len(counter), 'Max vocab size:',args.max_vocab_size)
@@ -130,25 +130,76 @@ if __name__ == '__main__':
     trainloader = DataLoader(trainset, batch_size=args.batch_size, shuffle=True, collate_fn=segmenter.pad_batch)
     validloader = DataLoader(validset, batch_size=args.batch_size, shuffle=True, collate_fn=segmenter.pad_batch)
 
+    if args.config:
+
+        with open(args.config) as cfile:
+            config = yaml.safe_load(cfile.read())
+            print("training with config")
+            print(config)
+
+        if args.family == 'markovian':
+
+            model = lm_models.MarkovianLM(args.ctx_size,
+                                          segmenter.vocab_size,
+                                          config['emb_size'],
+                                          round(config['emb_size']/ 2),
+                                          pad_value=segmenter.pad_id,
+                                          dropout=config["dropout"])
+        elif args.family == 'recurrent':
+
+            model = lm_models.LstmLM(segmenter.vocab_size,
+                                     config['emb_size'],
+                                     config['emb_size'],
+                                     nlayers=config['nlayers'],
+                                     pad_value=segmenter.pad_id,
+                                     dropout=config['dropout'])
+        elif args.family == 'transformer':
+
+            model = lm_models.TransformerLM(segmenter.vocab_size,
+                                            config['hidden_size'],
+                                            nlayers=config['nlayers'],
+                                            nheads=config['nheads'],
+                                            pad_value=segmenter.pad_id,
+                                            max_window_size=512,
+                                            dropout=config['dropout'])
+        else:
+            print(f'Model family undefined {args.family}')
+            exit(1)
+
+        model = model.train_lm(trainloader, validloader, config['epochs'],args.model_dir, LR=config['lr'], device=args.device)
+        exit(0)
+
     study = optuna.create_study()
     if args.family == 'markovian':
-        study.optimize(lambda x:markovian(x,args.model_name,segmenter, trainloader, validloader,args.ctx_size,args.epochs,args.device),n_trials=20,n_jobs=1)
+        study.optimize(lambda x:markovian(x,args.model_name,segmenter, trainloader, validloader,args.ctx_size,args.epochs,args.device),n_trials=args.n_trials,n_jobs=1)
         print("*** Search summary ***")
         print('Best parameters for markovian model with context size', args.ctx_size)
+        print('Vocabulary size:', segmenter.vocab_size)
         print('\n'.join([f'{key} : {value}' for key, value in study.best_params.items()]))
         print()
     elif args.family == 'recurrent':
-        study.optimize(lambda x: recurrent(x, args.model_name, segmenter, trainloader, validloader, args.ctx_size, args.epochs,args.device), n_trials=20, n_jobs=1)
+        study.optimize(lambda x: recurrent(x, args.model_name, segmenter, trainloader, validloader, args.ctx_size, args.epochs,args.device), n_trials=args.n_trials, n_jobs=1)
         print("*** Search summary ***")
         print('Best parameters for recurrent (LSTM) model')
+        print('Vocabulary size:', segmenter.vocab_size)
         print('\n'.join([f'{key} : {value}' for key, value in study.best_params.items()]))
         print()
     elif args.family == 'transformer':
-        study.optimize(lambda x: transformer(x, args.model_name, segmenter, trainloader, validloader, args.ctx_size, args.epochs,args.device), n_trials=20, n_jobs=1)
+        study.optimize(lambda x: transformer(x, args.model_name, segmenter, trainloader, validloader, args.ctx_size, args.epochs,args.device), n_trials=args.n_trials, n_jobs=1)
         print("*** Search summary ***")
         print('Best parameters for transformer model')
+        print('Vocabulary size:', segmenter.vocab_size)
         print('\n'.join([f'{key} : {value}' for key, value in study.best_params.items()]))
         print()
     else:
         print('Model family',args.family, 'is unknown. Aborting')
 
+    if args.model_name:
+        print(f'writing vocabulary and config file to {args.model_name}')
+        segmenter.save_pretrained(args.model_name)
+        with open(os.path.join(args.model_name,'config.yaml'),'w') as param_file:
+            param_dic = {'epochs':args.epochs,'family':args.family,'train':args.trainfile,'valid':args.validfile}
+            if args.family == 'markovian':
+                param_dic['ctx_size'] = args.ctx_size
+            param_dic.update(study.best_params)
+            param_file.write(yaml.dump(param_dic))

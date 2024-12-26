@@ -414,8 +414,8 @@ The Norwegian lives next to the blue house.
     validloader = DataLoader(dataset, batch_size=4, shuffle=True, collate_fn=segmenter.pad_batch)
 
     model       = MarkovianLM(3,segmenter.vocab_size,64,32,pad_value=segmenter.pad_id)
-    #model       = LstmLM(segmenter.vocab_size,64,64,pad_value=segmenter.pad_id)
-    #model       = TransformerLM(segmenter.vocab_size, 128 , nlayers=2, nheads=4,pad_value=segmenter.pad_id, max_window_size=128, dropout=0.0)
+    #model      = LstmLM(segmenter.vocab_size,64,64,pad_value=segmenter.pad_id)
+    #model      = TransformerLM(segmenter.vocab_size, 128 , nlayers=2, nheads=4,pad_value=segmenter.pad_id, max_window_size=128, dropout=0.0)
     model       = model.train_lm(trainloader,validloader,150,model_dir,LR=0.001,device="mps")
     print('perplexity',model.validate_lm(validloader,perplexity=True))
     gen_idxes = model.generate(segmenter("The man who smokes Chesterfields"),eos_token_id=segmenter.eos_token_id)
