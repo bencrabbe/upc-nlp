@@ -51,7 +51,7 @@ class PytorchLanguageModel(nn.Module):
         """
         return next(self.parameters()).device
 
-    def train_lm(self,train_loader,valid_loader,epochs,outdir,LR=0.001,device='cpu',show_progressbar=False):
+    def train_lm(self,train_loader,valid_loader,epochs,outdir=None,LR=0.001,device='cpu',show_progressbar=False):
         """
         Trains a model from scratch.
         Args:
@@ -60,6 +60,7 @@ class PytorchLanguageModel(nn.Module):
             epochs (int) : the number of training epochs
             outdir (path or string): path to the final model directory
         KwArgs:
+            outdir (path or string): path to the final model directory. If set to None, the best model is not automatically saved to disk
             LR (float)              : the initial learning rate of AdamW
             device (str)            : the device on which to train the model ('cpu','cuda','mps' ...)
             show_progressbar (bool): whether to show the progressbar when training
@@ -90,13 +91,16 @@ class PytorchLanguageModel(nn.Module):
             valid_loss = self.validate_lm(valid_loader,show_progressbar=show_progressbar)
             print(f'Epoch {e+1} | train loss = {sum(loss_lst)/len(loss_lst):.5f} | valid loss = {valid_loss:.5f}')
 
-            if valid_loss <= min_loss:
+            if valid_loss <= min_loss and outdir is not None:
                 self.save_pretrained(outdir)
                 min_loss = valid_loss
 
-        print(f'\ntraining done.\nModel saved in {outdir}')
-        return self.from_pretrained(outdir,device=self.get_device())
-
+        if outdir is not None:
+            print(f'\ntraining done.\nModel saved in {outdir}')
+            return self.from_pretrained(outdir,device=self.get_device())
+        else:
+            print(f'\ntraining done.')
+            return self
 
     def validate_lm(self,valid_loader,perplexity=False,show_progressbar=False):
         """
@@ -229,7 +233,7 @@ class LstmLM(PytorchLanguageModel):
         Args:
             path (path): path to the model directory
         """
-        torch.save(model.state_dict(), os.path.join(path,'params.pt'))
+        torch.save(self.state_dict(), os.path.join(path,'params.pt'))
         with open(os.path.join(path,'hyperparams.json'),'w') as outfile:
             outfile.write(json.dumps(self.hyper))
 
@@ -292,7 +296,7 @@ class TransformerLM(PytorchLanguageModel):
         Args:
             path (path): path to the model directory
         """
-        torch.save(model.state_dict(), os.path.join(path, 'params.pt'))
+        torch.save(self.state_dict(), os.path.join(path, 'params.pt'))
         with open(os.path.join(path, 'hyperparams.json'), 'w') as outfile:
             outfile.write(json.dumps(self.hyper))
 
@@ -352,7 +356,7 @@ class MarkovianLM(PytorchLanguageModel):
         Args:
             path (path): path to the model directory
         """
-        torch.save(model.state_dict(), os.path.join(path, 'params.pt'))
+        torch.save(self.state_dict(), os.path.join(path, 'params.pt'))
         with open(os.path.join(path, 'hyperparams.json'), 'w') as outfile:
             outfile.write(json.dumps(self.hyper))
 
