@@ -184,7 +184,7 @@ class PytorchLanguageModel(nn.Module):
 
 class LstmLM(PytorchLanguageModel):
 
-    def __init__(self,vocab_size,emb_size,hidden_size,nlayers = 2,pad_value=0,dropout=0.0):
+    def __init__(self,vocab_size,emb_size,hidden_size,nlayers = 2,pad_value=0,dropout=0.0,weight_tying=True):
         """
         An LSTM language model.
         Args:
@@ -199,7 +199,9 @@ class LstmLM(PytorchLanguageModel):
         super(LstmLM,self).__init__(pad_value)
         self.E = nn.Embedding(vocab_size, emb_size, padding_idx=pad_value)
         self.lstm = nn.LSTM(emb_size, hidden_size, nlayers, batch_first=True, dropout=dropout)
-        self.W = nn.Linear(hidden_size, vocab_size)
+        self.W = nn.Linear(hidden_size, vocab_size,bias=False)
+        if weight_tying:
+            self.W.weight = self.E.weight
         self.dropout = nn.Dropout(dropout)
         self.hyper = {'vocab_size':vocab_size,
                       'emb_size':emb_size,
@@ -254,7 +256,7 @@ class LstmLM(PytorchLanguageModel):
 
 class TransformerLM(PytorchLanguageModel):
 
-    def __init__(self,vocab_size,hidden_size,nlayers = 2,nheads=4,pad_value=0,max_window_size=512,dropout=0.0):
+    def __init__(self,vocab_size,hidden_size,nlayers = 2,nheads=4,pad_value=0,max_window_size=512,dropout=0.0,weight_tying=False):
         super(TransformerLM,self).__init__(pad_value)
         self.max_window_size = max_window_size
         self.word_embedding  = nn.Embedding(vocab_size,hidden_size,padding_idx=pad_value)
@@ -262,6 +264,8 @@ class TransformerLM(PytorchLanguageModel):
         transformer_layer    = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=nheads,dropout=dropout)
         self.transformer     = nn.TransformerEncoder(transformer_layer, num_layers=nlayers)
         self.W               = nn.Linear(hidden_size,vocab_size)
+        if weight_tying:
+            self.W.weight = self.word_embedding.weight
         self.dropout         = nn.Dropout(dropout)
         self.hyper           = {'vocab_size':vocab_size,
                                 'hidden_size':hidden_size,
@@ -321,7 +325,7 @@ class MarkovianLM(PytorchLanguageModel):
         self.E   = nn.Embedding(vocab_size,emb_size,padding_idx=pad_value)
         self.Win = nn.Linear(ctx_size*emb_size,hidden_size)
         self.act = nn.Tanh()
-        self.Wout= nn.Linear(hidden_size,vocab_size)
+        self.Wout = nn.Linear(hidden_size, vocab_size,bias=False)
         self.dropout = nn.Dropout(dropout)
 
         self.hyper = {  'ctx_size' : ctx_size,

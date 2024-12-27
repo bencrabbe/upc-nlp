@@ -1,1 +1,1 @@
-{"ctx_size": 4, "vocab_size": 40, "emb_size": 128, "hidden_size": 64, "pad_value": 1, "dropout": 0.48375807436473084}
+{"vocab_size": 40, "emb_size": 512, "hidden_size": 512, "nlayers": 2, "pad_value": 1, "dropout": 0.23255435807444363}
