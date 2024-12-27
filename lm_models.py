@@ -132,7 +132,6 @@ class PytorchLanguageModel(nn.Module):
                 loss_lst.append( (torch.exp(-preds_logp.sum() / mask.sum())).item())
             else:
                 loss = loss_fnc(Yhat.view(N * S, -1), Y.reshape(-1))
-                loss.backward()
                 loss_lst.append(loss.item())
         return sum(loss_lst)/len(loss_lst)
 
