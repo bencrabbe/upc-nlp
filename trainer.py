@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
     counter     = Counter(traintext.split())
     print('True vocabulary size:',len(counter), 'Max vocab size:',args.max_vocab_size)
-    segmenter   = tokenizers.DefaultTokenizer([elt for elt, count in counter.most_common(args.max_vocab_size)],bos='<bos>',eos='<eos>')
+    segmenter   = tokenizers.DefaultTokenizer([elt for elt, count in counter.most_common(args.max_vocab_size-4)],bos='<bos>',eos='<eos>')
 
     trainset = nlp_datasets.RandomAccessRawText([sent for sent in traintext.split('\n') if sent and not sent.isspace()],segmenter)
     validset = nlp_datasets.RandomAccessRawText([sent for sent in validtext.split('\n') if sent and not sent.isspace()],segmenter)
@@ -172,21 +172,21 @@ if __name__ == '__main__':
     study = optuna.create_study(study_name= f"{args.family} language model")
     if args.family == 'markovian':
         study.optimize(lambda x:markovian(x,args.model_name,segmenter, trainloader, validloader,args.ctx_size,args.epochs,args.device),n_trials=args.n_trials,n_jobs=1)
-        print("*** Search summary ***")
+        print("*** Summary ***")
         print('Best parameters for markovian model with context size', args.ctx_size)
         print('Vocabulary size:', segmenter.vocab_size)
         print('\n'.join([f'{key} : {value}' for key, value in study.best_params.items()]))
         print()
     elif args.family == 'recurrent':
-        study.optimize(lambda x: recurrent(x, args.model_name, segmenter, trainloader, validloader, args.ctx_size, args.epochs,args.device), n_trials=args.n_trials, n_jobs=1)
-        print("*** Search summary ***")
+        study.optimize(lambda x: recurrent(x, args.model_name, segmenter, trainloader, validloader, args.epochs,args.device), n_trials=args.n_trials, n_jobs=1)
+        print("*** Summary ***")
         print('Best parameters for recurrent (LSTM) model')
         print('Vocabulary size:', segmenter.vocab_size)
         print('\n'.join([f'{key} : {value}' for key, value in study.best_params.items()]))
         print()
     elif args.family == 'transformer':
-        study.optimize(lambda x: transformer(x, args.model_name, segmenter, trainloader, validloader, args.ctx_size, args.epochs,args.device), n_trials=args.n_trials, n_jobs=1)
-        print("*** Search summary ***")
+        study.optimize(lambda x: transformer(x, args.model_name, segmenter, trainloader, validloader, args.epochs,args.device), n_trials=args.n_trials, n_jobs=1)
+        print("*** Summary ***")
         print('Best parameters for transformer model')
         print('Vocabulary size:', segmenter.vocab_size)
         print('\n'.join([f'{key} : {value}' for key, value in study.best_params.items()]))
@@ -194,7 +194,7 @@ if __name__ == '__main__':
     else:
         print('Model family',args.family, 'is unknown. Aborting')
     print('\n*** All trials ***')
-    print(study.trials_dataframe())
+    print(study.trials_dataframe(attrs=['number','value','params','state']))
 
     if args.model_name:
         print(f'writing vocabulary and config file to {args.model_name}')
