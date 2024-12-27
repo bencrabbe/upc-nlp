@@ -1,7 +1,7 @@
 import torch
 import json
 import os
-
+import hashlib
 
 def normalize_text(text):
     """
@@ -13,7 +13,6 @@ def normalize_text(text):
     """
     translation_map = str.maketrans({'.':' . ','?':' ? ','!':' ! '})
     return text.translate(translation_map)
-
 
 
 class DefaultTokenizer:
@@ -38,6 +37,15 @@ class DefaultTokenizer:
       self.vocabulary = []
       self.types2idx  = {}
       self.add_tokens([self.unk,self.pad] + base_vocabulary + [ elt for elt in [bos,eos]  if elt is not None])
+
+  def signature(self):
+      """
+      Returns an md5 checksum of the vocabulary in this segmenter
+      """
+      vocab_hash = hashlib.md5()
+      for word in self.vocabulary:
+          vocab_hash.update(word.encode())
+      return vocab_hash.hexdigest()
 
   @staticmethod
   def from_pretrained(dirpath):
@@ -65,6 +73,7 @@ class DefaultTokenizer:
     """
     with open(os.path.join(dirpath,'tokenizer.json'),'w') as outfile:
       outfile.write(json.dumps({'unk':self.unk,'pad':self.pad,'vocabulary':self.vocabulary,'bos':self._bos,'eos':self._eos}))
+
 
 
   def add_tokens(self, tokens):

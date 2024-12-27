@@ -169,7 +169,7 @@ if __name__ == '__main__':
         model = model.train_lm(trainloader, validloader, config['epochs'],args.model_dir, LR=config['lr'], device=args.device)
         exit(0)
 
-    study = optuna.create_study()
+    study = optuna.create_study(study_name= f"{args.family} language model")
     if args.family == 'markovian':
         study.optimize(lambda x:markovian(x,args.model_name,segmenter, trainloader, validloader,args.ctx_size,args.epochs,args.device),n_trials=args.n_trials,n_jobs=1)
         print("*** Search summary ***")
@@ -193,6 +193,8 @@ if __name__ == '__main__':
         print()
     else:
         print('Model family',args.family, 'is unknown. Aborting')
+    print('\n*** All trials ***')
+    print(study.trials_dataframe())
 
     if args.model_name:
         print(f'writing vocabulary and config file to {args.model_name}')
@@ -201,5 +203,6 @@ if __name__ == '__main__':
             param_dic = {'epochs':args.epochs,'family':args.family,'train':args.trainfile,'valid':args.validfile}
             if args.family == 'markovian':
                 param_dic['ctx_size'] = args.ctx_size
+            param_dic.update({'vocab_md5':segmenter.signature(),'vocab_size':segmenter.vocab_size})
             param_dic.update(study.best_params)
             param_file.write(yaml.dump(param_dic))
