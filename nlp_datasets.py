@@ -12,8 +12,8 @@ class HubUpc:
     """
     This is a client allowing to download datasets from UPC nextcloud
     """
-    def __init__(self,local_hub_root):
-        self.local_hub_root = local_hub_root
+    def __init__(self):
+        self.local_hub_root = __HUB_ROOT__
         self.datasets_db = {'shakespeare':{'shakespeare.train.txt':'https://cloud.parisdescartes.fr/index.php/s/4efj4RKqetxrX2y',
                                            'shakespeare.valid.txt':'https://cloud.parisdescartes.fr/index.php/s/zAcaopxANtiRJB6',
                                            'shakespeare.test.txt':'https://cloud.parisdescartes.fr/index.php/s/ypDZa2kM2kpRBk9'},
