@@ -1,11 +1,12 @@
 import os
 import requests
 from torch.utils.data import Dataset
-
 from pathlib import Path
+from random import shuffle
 
 
 __HUB_ROOT__ = os.path.join(Path.home(),'upc_hub')
+
 
 class HubUpc:
     """
@@ -94,14 +95,14 @@ class HubUpc:
             db = self.datasets_db if chunk_type == 'datasets' else self.models_db
             for local_file in db[chunk_name]:
                 if local_file.endswith('.pt'):
-                    self.download_binary_file(db[chunk_name][local_file], os.path.join(chunk_path, local_file))
+                    self._download_binary_file(db[chunk_name][local_file], os.path.join(chunk_path, local_file))
                 else:
-                    self.download_text_file(db[chunk_name][local_file], os.path.join(chunk_path, local_file))
+                    self._download_text_file(db[chunk_name][local_file], os.path.join(chunk_path, local_file))
             print(f'Files written in {chunk_path}')
 
 
 
-    def download_binary_file(self,hubfilename,destination_path):
+    def _download_binary_file(self,hubfilename,destination_path):
         """
         Downloads a single binary file from the nextcloud
 
@@ -116,7 +117,7 @@ class HubUpc:
 
 
 
-    def download_text_file(self,hubfilename,destination_path):
+    def _download_text_file(self,hubfilename,destination_path):
         """
         Downloads a single text file from the nextcloud
         Args:
@@ -130,10 +131,13 @@ class HubUpc:
             outstream.write(result.text)
 
 
+
+
 class RandomAccessRawText(Dataset):
     """
     Wraps a list of strings (sentences or paragraphs) into a pytorch dataset.
-    This dataset does not preserve any order between data items
+    Tokenized sequences that are longer than some size are truncated and split into several data items
+    This dataset does not preserve any order between data items.
     """
 
     def __init__(self,data,tokenizer,max_seq_size=512):
@@ -145,7 +149,7 @@ class RandomAccessRawText(Dataset):
            max_seq_size (int): maximum size of a data sequence. Longer sequences are truncated
         """
         self.data = [  trunc_chunk for chunk in data for trunc_chunk in self._truncate(tokenizer(chunk),max_seq_size)]
-
+        shuffle(self.data)
 
     def _truncate(self,seq,size):
 
