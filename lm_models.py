@@ -5,6 +5,7 @@ import os
 import torch
 import torch.optim as optim
 import torch.nn as nn
+from click.core import batch
 from torch.nn.functional import pad, dropout
 import tqdm
 import json
@@ -22,8 +23,10 @@ class PytorchLanguageModel(nn.Module):
     def from_pretrained(path):
         """
         Loads a model from directory
+
         Args:
             path (path): a path to the model dir file
+
         Returns:
             a language model.
         """
@@ -33,6 +36,7 @@ class PytorchLanguageModel(nn.Module):
     def save_pretrained(self, path):
         """
         Saves the model parameters and hyperparameters to directory
+
         Args:
             path (path): path to the model directory
         """
@@ -46,6 +50,7 @@ class PytorchLanguageModel(nn.Module):
     def get_device(self):
         """
         Returns the device on which all the parameters of the model are located
+
         Returns:
             device
         """
@@ -54,16 +59,25 @@ class PytorchLanguageModel(nn.Module):
     def train_lm(self,train_loader,valid_loader,epochs,outdir=None,LR=0.001,device='cpu',show_progressbar=False):
         """
         Trains a model from scratch.
+
         Args:
             train_loader (dataloader): a dataloader on the train set
+
             valid_loader (dataloader): a dataloader on the valid set
-            epochs (int) : the number of training epochs
+
+            epochs (int): the number of training epochs
+
             outdir (path or string): path to the final model directory
+
         KwArgs:
-            outdir (path or string): path to the final model directory. If set to None, the best model is not automatically saved to disk
-            LR (float)              : the initial learning rate of AdamW
-            device (str)            : the device on which to train the model ('cpu','cuda','mps' ...)
+            outdir (path or string): path to the final model directory. If set to None, no model is automatically saved to disk
+
+            LR (float): the initial learning rate of AdamW
+
+            device (str): the device on which to train the model ('cpu','cuda','mps' ...)
+
             show_progressbar (bool): whether to show the progressbar when training
+
         Returns
             the model with minimal loss over the epochs
         """
@@ -105,11 +119,15 @@ class PytorchLanguageModel(nn.Module):
     def validate_lm(self,valid_loader,perplexity=False,show_progressbar=False):
         """
         Computes the loss on the validation dataset
+
         Args:
             valid_loader (dataloader) : dataloader for the validation set
+
         KwArgs:
             perplexity (float): if true returns the perplexity of the language model on the validation set, otherwise an averaged loglikelihood
+
             show_progressbar (bool): whether to show the progressbar when training
+
         Returns :
             float. the averaged validation loss
         """
@@ -161,13 +179,16 @@ class PytorchLanguageModel(nn.Module):
         """
         Generates symbols with the language model. This is a generic and inefficient method suitable for generating small texts with small models.
         Most larger scale models subclasses will want to override it.
+
         Args:
             prefix       (list): a list of token ids, the prefix symbol sequence
+
         KwArgs:
             temperature (float): the temperature of the softmax
             do_sample    (bool): whether to use sampling or argmax to generate next token
             max_tokens   (int) : the max number of generated tokens
             eos_token_id (int) : generation stops once this token_id is generated
+
         Returns:
             LongTensor. Tensor with the full encoded text
         """
@@ -181,6 +202,16 @@ class PytorchLanguageModel(nn.Module):
                 return prefix
         return prefix
 
+    def logprobs(self,sequence):
+        """
+        Computes the logprob given context for each token given in the sequence
+
+        Args:
+            sequence (list) : a list of integer codes
+        Returns:
+            tensor. a tensor of log probabilities. One value for each input token.
+        """
+        pass
 
 class LstmLM(PytorchLanguageModel):
 
@@ -189,11 +220,15 @@ class LstmLM(PytorchLanguageModel):
         An LSTM language model.
         Args:
             vocab_size (int) : size of the vocabulary
+
             emb_size   (int) : size of the embeddings
+
             hidden_size (int): size of the hidden layer
         KwArgs:
             nlayers     (int): number of layers
+
             pad_value   (int): pad token id
+
             dropout   (float): value of the dropout
         """
         super(LstmLM,self).__init__(pad_value)
@@ -242,10 +277,12 @@ class LstmLM(PytorchLanguageModel):
 
     def forward(self,xinputs):
         """
-        This takes a batch of N sequences of S tokens each
-        And for each token predicts its successors' scores
+        This takes a batch of N sequences of S tokens each.
+        For each token it redicts its successors' scores
+
         Args:
             xinputs (tensor): the tokens ids, a tensor of shape (N,S)
+
         Returns:
             the scores. A tensor of shape (N,S,V)
         """
@@ -261,7 +298,7 @@ class TransformerLM(PytorchLanguageModel):
         self.max_window_size = max_window_size
         self.word_embedding  = nn.Embedding(vocab_size,hidden_size,padding_idx=pad_value)
         self.posn_embedding  = nn.Embedding(max_window_size,hidden_size,padding_idx=pad_value)
-        transformer_layer    = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=nheads,dropout=dropout)
+        transformer_layer    = nn.TransformerEncoderLayer(d_model=hidden_size, nhead=nheads,batch_first=True,dropout=dropout)
         self.transformer     = nn.TransformerEncoder(transformer_layer, num_layers=nlayers)
         self.W               = nn.Linear(hidden_size,vocab_size)
         if weight_tying:
@@ -310,9 +347,15 @@ class TransformerLM(PytorchLanguageModel):
             raise Exception(f"Problem when running TransformerLM. Maximum inference window size exceeded. Found {S} where maximum window size is {self.max_window_size}")
 
         dev = xinputs.get_device()
-        posn_ids = torch.arange(S,device= dev if dev >=0 else "cpu").expand(N,S) #this should be registered as a buffer
+        dev = dev if dev >= 0 else 'cpu'
+
+        posn_ids = torch.arange(S,device=dev).expand(N,S)
         input_embeddings = self.dropout(self.word_embedding(xinputs) + self.posn_embedding(posn_ids))
-        hidden = self.transformer(input_embeddings)
+
+        causal_mask  = nn.Transformer.generate_square_subsequent_mask(S,dev)
+        padding_mask = (xinputs == self.hyper['pad_value']).to(dev)
+
+        hidden = self.transformer(input_embeddings,mask=causal_mask,is_causal=True,src_key_padding_mask=padding_mask)
         return self.W(hidden)
 
 

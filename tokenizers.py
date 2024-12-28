@@ -16,19 +16,23 @@ def normalize_text(text):
 
 
 class DefaultTokenizer:
+
   """
-  DefaultTokenizer that approximates the HuggingFace tokenizer interface
+  DefaultTokenizer that approximates the HuggingFace tokenizer interface.
   """
+
   def __init__(self, base_vocabulary, unk='<unk>',pad='<pad>',bos=None,eos=None):
       """
       Creates a tokenizer with some vocabulary and an unknown token
+
       Args:
         base_vocabulary: list of strings
+
       KwArgs:
-        unk: string for unknown tokens
-        pad: string for padding tokens
-        eos: string for eos token
-        bos: string for bos token
+        unk (str): string for unknown tokens
+        pad (str): string for padding tokens
+        eos (str): string for eos token
+        bos (str): string for bos token
       """
       assert(type(base_vocabulary) == list)
       self.unk = unk
@@ -40,7 +44,11 @@ class DefaultTokenizer:
 
   def signature(self):
       """
-      Returns an md5 checksum of the vocabulary in this segmenter
+      Returns an md5 checksum of the vocabulary in this segmenter.
+      Can be used to test if two segmenters perform the exact same segmentation on the same input
+
+      Returns:
+          a string
       """
       vocab_hash = hashlib.md5()
       for word in self.vocabulary:
@@ -51,8 +59,10 @@ class DefaultTokenizer:
   def from_pretrained(dirpath):
     """
     Loads the tokenizer from the model directory
+
     Args:
       dirpath (path or string) : path to the tokenizer params dir
+
     Returns:
       a DefaultTokenizer object
     """
@@ -68,6 +78,7 @@ class DefaultTokenizer:
   def save_pretrained(self,dirpath):
     """
     Saves the tokenizer to model dir.
+
     Args:
       dirpath (path or string) : path to the tokenizer params dir
     """
@@ -79,6 +90,7 @@ class DefaultTokenizer:
   def add_tokens(self, tokens):
     """
     Adds a list of tokens to the vocabulary.
+
     Args:
       tokens :  a list of strings to add to the vocabulary
     """
@@ -94,8 +106,10 @@ class DefaultTokenizer:
   def tokenize(self, string):
     """
     Splits a string into tokens
+
     Args:
       string : a string to tokenize
+
     Returns:
       a list of strings
     """
@@ -111,6 +125,7 @@ class DefaultTokenizer:
   def convert_tokens_to_ids(self, tokens):
     """
     Maps a list of tokens to integer codes
+
     Args:
       tokens : a list of strings
     Returns:
@@ -122,7 +137,8 @@ class DefaultTokenizer:
   def encode(self, string):
     """
     Encodes a string into a list of integers
-     Args:
+
+    Args:
       string : a text to encode
     Returns:
       a list of integers
@@ -133,6 +149,7 @@ class DefaultTokenizer:
   def decode(self,ids):
     """
     Decodes a list of integers into a string
+
     Args:
       ids : a list of integers
     Returns:
@@ -150,31 +167,40 @@ class DefaultTokenizer:
   @property
   def pad_id(self):
     """
-    Returns the id of the pad token
+    the id of the pad token
     """
     return self.types2idx[self.pad]
 
   @property
   def bos_token(self):
+    """
+    the string used for the begin of sentence token
+    """
     if self._bos is None:
       raise Exception("Warning trying to use the bos token while it is undefined for the tokenizer")
     return self._bos
 
   @property
   def eos_token(self):
+    """
+    the string used for the end of sentence token
+    """
     if self._eos is None:
       raise Exception("Warning trying to use the eos token while it is undefined for the tokenizer")
     return self._eos
 
   @property
   def eos_token_id(self):
+    """
+    the integer used for the end of sentence token
+    """
     return self.types2idx[self.eos_token]
 
 
   @property
   def vocab_size(self):
     """
-    Returns the size of the vocabulary
+    the size of the vocabulary
     """
     return len(self.vocabulary)
 
@@ -182,8 +208,10 @@ class DefaultTokenizer:
   def pad_batch(self,batch_codes):
     """
     Pads a batch of integers with the pad code
+
     Args:
       batch_codes : a list of lists of integers
+
     Returns:
       a list of lists of integers as a tensor
     """
