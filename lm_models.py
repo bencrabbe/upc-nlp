@@ -15,6 +15,7 @@ class AutoModel:
     """
     This is a namespace for easy loading of models defined from this module.
     """
+
     @staticmethod
     def from_pretrained(path,device='cpu'):
         """
@@ -42,7 +43,7 @@ class AutoModel:
 
 
 class PytorchLanguageModel(nn.Module):
-"""
+    """
     This is an abstract class providing the generic interface to language models: train, eval and generate
     Actual model architectures are specified as subclasses.
     """

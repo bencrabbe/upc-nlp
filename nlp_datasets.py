@@ -2,6 +2,7 @@ import os
 import requests
 from torch.utils.data import Dataset
 from pathlib import Path
+import zipfile
 
 
 __HUB_ROOT__ = os.path.join(Path.home(),'upc_hub')
@@ -13,22 +14,15 @@ class HubUpc:
     """
     def __init__(self):
         self.local_hub_root = __HUB_ROOT__
-        self.datasets_db = {'shakespeare':{'shakespeare.train.txt':'https://cloud.parisdescartes.fr/index.php/s/4efj4RKqetxrX2y',
-                                           'shakespeare.valid.txt':'https://cloud.parisdescartes.fr/index.php/s/zAcaopxANtiRJB6',
-                                           'shakespeare.test.txt':'https://cloud.parisdescartes.fr/index.php/s/ypDZa2kM2kpRBk9'},
-                            'ulysses':{'ulysses.train.txt':'',
-                                       'ulysses.valid.txt':'',
-                                       'ulysses.text.txt':''},
-                            'wikitext2':"",#https://github.com/Marsan-Ma-zz/chat_corpus
-                            'opensubtitles':'',
-                            'twitter-small':''
-                            }
 
-        self.models_db   = {'zebra-lstm':{"config.json":"https://cloud.parisdescartes.fr/index.php/s/rr3G8c22Nx4Ayo5",
-                                          'config.yaml':"https://cloud.parisdescartes.fr/index.php/s/sR8j9pASZZ7FQGj",
-                                          'hyperparams.json':'https://cloud.parisdescartes.fr/index.php/s/2wRBww7aqmm6wLt',
-                                          'params.pt':'https://cloud.parisdescartes.fr/index.php/s/xLkzoyXCaHxt3sZ',
-                                          'tokenizer.json':'https://cloud.parisdescartes.fr/index.php/s/ztRJ77AP23a4as3'}}
+        #https: // github.com / Marsan - Ma - zz / chat_corpus
+        self.datasets_db = {'shakespeare':'https://cloud.parisdescartes.fr/index.php/s/Ao5YqWsfz49mf9M',
+                            'ulysses':'https://cloud.parisdescartes.fr/index.php/s/s7RXQQDecxEgKay',
+                            'wikitext103':"https://cloud.parisdescartes.fr/index.php/s/pwN63TkKL5QtCqi",
+                            'opensubtitles':'https://cloud.parisdescartes.fr/index.php/s/aqCzgGF5diTrf8A',
+                            'twitter':'https://cloud.parisdescartes.fr/index.php/s/5zymCK68D8gC4Ky'}
+
+        self.models_db   = {'zebra-lstm':''}
 
         if not os.path.exists(self.local_hub_root):
             os.mkdir(self.local_hub_root)
@@ -66,7 +60,7 @@ class HubUpc:
         Returns:
             path
         """
-        if os.path.exists(path):
+        if os.path.exists(os.path.join(self.local_hub_root,path)):
             return path
 
         chunks = os.path.split(path)
@@ -96,7 +90,7 @@ class HubUpc:
         KwArgs:
            chunk_type (str): either 'datasets' or 'pretrained'
         """
-
+        print('downloading')
         if chunk_type == 'datasets' and chunk_name not in self.datasets_db:
             raise Exception("Error. this dataset is not available. Use list_datasets() to get an up to date list of available data sets")
 
@@ -108,11 +102,15 @@ class HubUpc:
             os.mkdir(chunk_path)
             print(f'Downloading files for {chunk_name}...')
             db = self.datasets_db if chunk_type == 'datasets' else self.models_db
-            for local_file in db[chunk_name]:
-                if local_file.endswith('.pt'):
-                    self._download_binary_file(db[chunk_name][local_file], os.path.join(chunk_path, local_file))
-                else:
-                    self._download_text_file(db[chunk_name][local_file], os.path.join(chunk_path, local_file))
+            remotefile = db[chunk_name]
+            localfile  = f'{chunk_path}.zip'
+            localpath  = os.path.join(self.local_hub_root,chunk_type,localfile)
+            self._download_binary_file(remotefile, localpath)
+            with zipfile.ZipFile(localpath,'r') as dzip:
+                dzip.extractall(os.path.join(self.local_hub_root,chunk_type))
+            os.remove(localpath)
+
+
             print(f'Files written in {chunk_path}')
 
 
