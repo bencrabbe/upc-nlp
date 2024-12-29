@@ -7,10 +7,42 @@ import torch.optim as optim
 import torch.nn as nn
 from torch.nn.functional import pad, dropout
 import tqdm
-import json
+import json, yaml
+import nlp_datasets
+
+
+class AutoModel:
+    """
+    This is a namespace for easy loading of models defined from this module.
+    """
+    @staticmethod
+    def from_pretrained(path,device='cpu'):
+        """
+        Loads a pretrained model from directory.
+
+        Args:
+            path(path) : path to the model directory (either in the hub or local)
+
+        Returns:
+            the pretrained model instance
+        """
+        hub = nlp_datasets.HubUpc()
+        local_path = hub.get_local_path(path)
+        yaml_path  = os.path.join(local_path,'config.yaml')
+        with open(yaml_path) as infile:
+            config = yaml.safe_load(infile)
+        if config['family'] == 'markovian':
+            return MarkovianLM.from_pretrained(local_path,device)
+        elif config['family'] == 'recurrent':
+            return LstmLM.from_pretrained(local_path,device)
+        elif config['family'] == 'transformer':
+            return TransformerLM.from_pretrained(local_path,device)
+        else:
+            raise Exception('Cannot load model: family type is unknown. ')
+
 
 class PytorchLanguageModel(nn.Module):
-    """
+"""
     This is an abstract class providing the generic interface to language models: train, eval and generate
     Actual model architectures are specified as subclasses.
     """

@@ -2,6 +2,7 @@ import torch
 import json
 import os
 import hashlib
+import nlp_datasets
 
 def normalize_text(text):
     """
@@ -13,6 +14,26 @@ def normalize_text(text):
     """
     translation_map = str.maketrans({'.':' . ','?':' ? ','!':' ! '})
     return text.translate(translation_map)
+
+
+class AutoTokenizer:
+    """
+    This is a namespace for easy loading of tokenizers defined from this module.
+    """
+    @staticmethod
+    def from_pretrained(path):
+        """
+        Loads a pretrained model from directory.
+
+        Args:
+            path(path) : path to the model dir (either in the hub or local)
+
+        Returns:
+            the pretrained model instance
+        """
+        hub = nlp_datasets.HubUpc()
+        local_path = hub.get_local_path(path)
+        return DefaultTokenizer.from_pretrained(local_path)
 
 
 class DefaultTokenizer:

@@ -2,7 +2,6 @@ import os
 import requests
 from torch.utils.data import Dataset
 from pathlib import Path
-from random import shuffle
 
 
 __HUB_ROOT__ = os.path.join(Path.home(),'upc_hub')
@@ -10,7 +9,7 @@ __HUB_ROOT__ = os.path.join(Path.home(),'upc_hub')
 
 class HubUpc:
     """
-    This is a client allowing to download datasets from UPC nextcloud
+    This is a client allowing to download datasets and pretrained models from UPC nextcloud
     """
     def __init__(self):
         self.local_hub_root = __HUB_ROOT__
@@ -20,7 +19,10 @@ class HubUpc:
                             'ulysses':{'ulysses.train.txt':'',
                                        'ulysses.valid.txt':'',
                                        'ulysses.text.txt':''},
-                            'wikitext2':""}
+                            'wikitext2':"",#https://github.com/Marsan-Ma-zz/chat_corpus
+                            'opensubtitles':'',
+                            'twitter-small':''
+                            }
 
         self.models_db   = {'zebra-lstm':{"config.json":"https://cloud.parisdescartes.fr/index.php/s/rr3G8c22Nx4Ayo5",
                                           'config.yaml':"https://cloud.parisdescartes.fr/index.php/s/sR8j9pASZZ7FQGj",
@@ -36,9 +38,21 @@ class HubUpc:
 
 
     def list_datasets(self):
+        """
+        Returns a list of all dataset identifiers currently in the hub
+
+        Returns:
+            a list of strings
+        """
         return list(self.datasets_db.keys())
 
     def list_models(self):
+        """
+        Returns a list of all pretrained models identifiers currently in the hub
+
+        Returns:
+            a list of strings
+        """
         return list(self.models_db.keys())
 
 
@@ -67,13 +81,13 @@ class HubUpc:
             return path
 
         if tail in dic:
-            self.download_dir(tail,chunk_type=head)
+            self._download_dir(tail,chunk_type=head)
             return os.path.join(self.local_hub_root,path)
         else:
             return path
 
 
-    def download_dir(self, chunk_name,chunk_type='datasets'):
+    def _download_dir(self, chunk_name,chunk_type='datasets'):
         """
         Downloads a full chunk from UPC nextcloud and puts it in cache if not already cached
 
@@ -138,19 +152,18 @@ class RandomAccessRawText(Dataset):
     """
     Wraps a list of strings (sentences or paragraphs) into a pytorch dataset.
     Tokenized sequences that are longer than some size are truncated and split into several data items
-    This dataset does not preserve any order between data items.
     """
-
     def __init__(self,data,tokenizer,max_seq_size=512):
         """
         Args:
+            data (list): a list of strings (sentences or paragraphs)
+
             tokenizer (callable): a tokenizer is a callable mapping a string to a list of integers
 
         KwArgs:
            max_seq_size (int): maximum size of a data sequence. Longer sequences are truncated
         """
         self.data = [  trunc_chunk for chunk in data for trunc_chunk in self._truncate(tokenizer(chunk),max_seq_size)]
-        shuffle(self.data)
 
     def _truncate(self,seq,size):
 
