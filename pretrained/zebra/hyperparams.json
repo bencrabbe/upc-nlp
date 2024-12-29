@@ -1,1 +1,1 @@
-{"vocab_size": 40, "emb_size": 512, "hidden_size": 512, "nlayers": 2, "pad_value": 1, "dropout": 0.23255435807444363}
+{"vocab_size": 59, "hidden_size": 512, "nlayers": 2, "nheads": 2, "pad_value": 1, "max_window_size": 512, "dropout": 0.32892342476050024}

@@ -27,6 +27,7 @@ class HubUpc:
                                           'hyperparams.json':'https://cloud.parisdescartes.fr/index.php/s/2wRBww7aqmm6wLt',
                                           'params.pt':'https://cloud.parisdescartes.fr/index.php/s/xLkzoyXCaHxt3sZ',
                                           'tokenizer.json':'https://cloud.parisdescartes.fr/index.php/s/ztRJ77AP23a4as3'}}
+
         if not os.path.exists(self.local_hub_root):
             os.mkdir(self.local_hub_root)
             os.mkdir(os.path.join(self.local_hub_root,'pretrained'))
@@ -169,7 +170,7 @@ class RandomAccessRawText(Dataset):
         return self.data[idx]
 
 if __name__ == '__main__':
-    hub = HubUpc(__HUB_ROOT__)
+    hub = HubUpc()
     print(hub.list_datasets())
     hub.download_dir('shakespeare',chunk_type='datasets')
     print(hub.list_models())

@@ -5,7 +5,6 @@ import os
 import torch
 import torch.optim as optim
 import torch.nn as nn
-from click.core import batch
 from torch.nn.functional import pad, dropout
 import tqdm
 import json
@@ -54,7 +53,10 @@ class PytorchLanguageModel(nn.Module):
         Returns:
             device
         """
-        return next(self.parameters()).device
+        device = next(self.parameters()).device
+        if device == -1 :
+            return 'cpu'
+        return device
 
     def train_lm(self,train_loader,valid_loader,epochs,outdir=None,LR=0.001,device='cpu',show_progressbar=False):
         """
@@ -202,16 +204,25 @@ class PytorchLanguageModel(nn.Module):
                 return prefix
         return prefix
 
-    def logprobs(self,sequence):
+    def logprobs(self,sequence,bos_id):
         """
-        Computes the logprob given context for each token given in the sequence
-
+        Computes the logprob given context for each token given in the sequence.
+        The method prepends a <bos> token at the beginning of the sequence if there is none
         Args:
             sequence (list) : a list of integer codes
+            bos_id    (int) : code for the bos token
         Returns:
-            tensor. a tensor of log probabilities. One value for each input token.
+            tensor. a tensor of log probabilities of the same size as the input tensor.
+            One value for each input token. No value for the bos token
         """
-        pass
+        if sequence[0] != bos_id:
+            sequence = [bos_id] + sequence
+
+        xinput = torch.LongTensor(sequence[:-1]).to(self.get_device())
+        Y      = torch.LongTensor(sequence[1:]).to(self.get_device())
+        Yhat = self.forward(xinput.unsqueeze(0))
+        Yhat = nn.LogSoftmax(dim=-1)(Yhat)
+        return Yhat.gather(-1, Y.unsqueeze(-1)).squeeze()
 
 class LstmLM(PytorchLanguageModel):
 
@@ -346,9 +357,7 @@ class TransformerLM(PytorchLanguageModel):
         if S >= self.max_window_size:
             raise Exception(f"Problem when running TransformerLM. Maximum inference window size exceeded. Found {S} where maximum window size is {self.max_window_size}")
 
-        dev = xinputs.get_device()
-        dev = dev if dev >= 0 else 'cpu'
-
+        dev = self.get_device()
         posn_ids = torch.arange(S,device=dev).expand(N,S)
         input_embeddings = self.dropout(self.word_embedding(xinputs) + self.posn_embedding(posn_ids))
 
