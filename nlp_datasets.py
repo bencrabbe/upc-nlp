@@ -15,12 +15,13 @@ class HubUpc:
     def __init__(self):
         self.local_hub_root = __HUB_ROOT__
 
-        #https: // github.com / Marsan - Ma - zz / chat_corpus
         self.datasets_db = {'shakespeare':'https://cloud.parisdescartes.fr/index.php/s/Ao5YqWsfz49mf9M',
                             'ulysses':'https://cloud.parisdescartes.fr/index.php/s/s7RXQQDecxEgKay',
                             'wikitext103':"https://cloud.parisdescartes.fr/index.php/s/pwN63TkKL5QtCqi",
                             'opensubtitles':'https://cloud.parisdescartes.fr/index.php/s/aqCzgGF5diTrf8A',
-                            'twitter':'https://cloud.parisdescartes.fr/index.php/s/5zymCK68D8gC4Ky'}
+                            'twitter':'https://cloud.parisdescartes.fr/index.php/s/5zymCK68D8gC4Ky',
+                            'semcor':'https://cloud.parisdescartes.fr/index.php/s/o67jnk4gTw3SndD',
+                            'enwords':'https://cloud.parisdescartes.fr/index.php/s/FyikmpFEMM2EePL'}
 
         self.models_db   = {'zebra-lstm':''}
 
@@ -60,8 +61,9 @@ class HubUpc:
         Returns:
             path
         """
-        if os.path.exists(os.path.join(self.local_hub_root,path)):
-            return path
+        fullpath = os.path.join(self.local_hub_root,path)
+        if os.path.exists(fullpath):
+            return fullpath
 
         chunks = os.path.split(path)
         if len(chunks) != 2:
@@ -76,7 +78,7 @@ class HubUpc:
 
         if tail in dic:
             self._download_dir(tail,chunk_type=head)
-            return os.path.join(self.local_hub_root,path)
+            return fullpath
         else:
             return path
 
