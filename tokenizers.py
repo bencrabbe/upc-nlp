@@ -3,18 +3,30 @@ import json
 import os
 import hashlib
 import nlp_datasets
+import re
+import wn
+import inflect
+
+
+__all__ = ['normalize_text','AutoTokenizer','WordNetTokenizer','PunctuationTokenizer']
+
 
 def normalize_text(text):
     """
-    For tokenizers splitting tokens on blank spaces it is relevant to normalize spacing before tokenization
+    For tokenizers splitting tokens on blank spaces it is relevant to normalize spacing before tokenization.
+    Case is lowered too.
     Args:
         text (str): the text to normalize
     Returns:
          the normalized text
     """
-    translation_map = str.maketrans({'.':' . ','?':' ? ','!':' ! '})
-    return text.translate(translation_map)
+    translation_map = str.maketrans({'.':' . ','?':' ? ','!':' ! ',',':' , ' })
+    text = text.translate(translation_map)
+    return " ".join(text.split()).lower()
 
+
+__WORDNET__ = wn.Wordnet('oewn:2024')
+__MORPH_GEN__ = inflect.engine()
 
 class AutoTokenizer:
     """
@@ -44,7 +56,7 @@ class AbstractTokenizer:
     """
     def __init__(self,unk='<unk>',pad='<pad>',bos=None,eos=None):
         """
-        KwArgs:
+        Args:
             unk(str): string for unknown tokens
             pad(str): string for padding tokens
             eos(str): string for eos token
@@ -70,6 +82,30 @@ class AbstractTokenizer:
             vocab_hash.update(word.encode())
         return vocab_hash.hexdigest()
 
+    @staticmethod
+    def from_pretrained(dirpath):
+        """
+        Loads the tokenizer from the model directory
+
+        Args:
+          dirpath (path or string) : path to the tokenizer params dir
+
+        Returns:
+          a DefaultTokenizer object
+        """
+        with open(os.path.join(dirpath, 'tokenizer.json')) as infile:
+            ldict = json.loads(infile.read())
+            if ldict['ClassName'] == 'PunctuationTokenizer':
+                return PunctuationTokenizer(ldict['vocabulary'],unk=ldict['unk'],
+                                                                pad=ldict['pad'],
+                                                                bos=ldict['bos'],
+                                                                eos=ldict['eos'])
+            elif ldict['ClassName'] == 'WordNetTokenizer':
+                return WordNetTokenizer(__WORDNET__,ldict['vocabulary'],
+                                                    unk=ldict['unk'],
+                                                    pad=ldict['pad'],
+                                                    bos=ldict['bos'],
+                                                    eos=ldict['eos'])
 
     def save_pretrained(self,dirpath):
         """
@@ -218,9 +254,7 @@ class PunctuationTokenizer(AbstractTokenizer):
       Creates a tokenizer with some vocabulary and an unknown token
 
       Args:
-        base_vocabulary: list of strings
-
-      KwArgs:
+        base_vocabulary (list): list of strings
         unk (str): string for unknown tokens
         pad (str): string for padding tokens
         eos (str): string for eos token
@@ -231,32 +265,13 @@ class PunctuationTokenizer(AbstractTokenizer):
       self.add_tokens([self.unk,self.pad] + base_vocabulary + [ elt for elt in [bos,eos]  if elt is not None])
 
 
-  @staticmethod
-  def from_pretrained(dirpath):
-    """
-    Loads the tokenizer from the model directory
-
-    Args:
-      dirpath (path or string) : path to the tokenizer params dir
-
-    Returns:
-      a DefaultTokenizer object
-    """
-    with open(os.path.join(dirpath,'tokenizer.json')) as infile:
-      ldict = json.loads(infile.read())
-      return PunctuationTokenizer(ldict['vocabulary'],
-                              unk=ldict['unk'],
-                              pad=ldict['pad'],
-                              bos=ldict['bos'],
-                              eos=ldict['eos'])
-
 
   def tokenize(self, string):
     """
     Splits a string into tokens
 
     Args:
-      string : a string to tokenize
+      string (str) : a string to tokenize
 
     Returns:
       a list of strings
@@ -272,65 +287,62 @@ class PunctuationTokenizer(AbstractTokenizer):
 
 
 
-
-import wn
-import inflect
-import re
-morph_gen = inflect.engine()
-
 def all_en_inflections(wordform,pos):
     """
-    Returns the inflections of an English wordform
+    Returns the inflections for an English lemma
     Args:
-        wordform (str): an English wordform
+        wordform (str): an English lemma
         pos      (str): a part of speech code (n,v,a)
     Returns:
-        a list of inflected wordforms including the original query
+        a list of inflected wordforms including the original query lemma
     """
     result = [wordform]
     if pos == 'n':
-        result.extend(morph_gen.plural_noun(wordform))
+        result.extend(__MORPH_GEN__.plural_noun(wordform))
     elif pos == 'v':
-        result.extend(morph_gen.plural_verb(wordform))
+        result.extend(__MORPH_GEN__.plural_verb(wordform))
         if ' ' in wordform:
             elt,*rest = wordform.split()
             result.append(''.join([elt,'s',' ']+rest))
         else:
             result.append(wordform+"s")
     elif pos == 'a':
-        result.extend(morph_gen.plural_adj(wordform))
+        result.extend(__MORPH_GEN__.plural_adj(wordform))
     return list(set(result))
 
 
 class WordNetTokenizer(AbstractTokenizer):
     """
     This is a tokenizer that tokenizes text by recognizing explicitly the wordnet vocabulary.
-    The tokenizer never transforms the original text. The input can indeed be reconstructed from the tokenizer output if needed.
+    It may naturally recognize some multi-word expressions provided a properly normalized input text.
+    It is possible to configure the tokenizer in a mode such that the exact input can be reconstructed from the output tokens.
     """
-    def __init__(self,wordnet, unk='<unk>', pad='<pad>', bos=None, eos=None):
+    def __init__(self,wordnet=__WORDNET__, unk='<unk>', pad='<pad>', bos=None, eos=None):
 
         super(WordNetTokenizer, self).__init__(unk, pad,bos,eos)
 
-        #downloads a basic English wordlist
+        #downloads a basic English wordlist (functional words are generally not in wordnet)
         hub  = nlp_datasets.HubUpc()
         path = os.path.join(hub.get_local_path('datasets/enwords'),'enwordlist.txt')
         with open(path) as infile:
             wordlist = infile.read().split()
 
         #put the wordnet vocabulary
-        for w in wn.words():
+        for w in wordnet.words():
             for wf in w.forms():
                 wordlist.extend(all_en_inflections(wf,w.pos))
-
+        self.wordnet = wordnet
         self.add_tokens([self.unk, self.pad] + wordlist + [elt for elt in [bos, eos] if elt is not None])
         self.vocabulary.sort(key=lambda x:len(x),reverse=True) #this is to achieve a longest match effect
 
-    def tokenize(self, string, include_separators = False):
+    def tokenize(self, string, include_separators = False,wn_lemmatizer=None):
         """
         Splits a string into tokens
 
         Args:
-            string : a string to tokenize
+            string (str) : a string to tokenize
+            include_separators (bool): flag controlling whether to include inter-token strings (whitespace most of the time)
+            wn_lemmatizer (lemmatizer): A callable returning the wordnet lemma(s) for a given word string. wn.Morphy is an example
 
         Returns:
             a list of strings
@@ -349,12 +361,15 @@ class WordNetTokenizer(AbstractTokenizer):
             idxes = zip(idxes,idxes[1:])
 
         result = []
-        if self.bos_token:
+        if self._bos:
             result = [self.bos_token]
         for start,end in idxes:
             result.append(string[start:end])
-        if self.eos_token:
+        if self._eos:
             result.append(self.eos_token)
+        if wn_lemmatizer:
+            return [ wn_lemmatizer(token) for token in result]
+
         return result
 
     def add_tokens(self, tokens):
@@ -370,10 +385,11 @@ class WordNetTokenizer(AbstractTokenizer):
 
 if __name__ == '__main__':
     #quick how to
-    #tok = PunctuationTokenizer(normalize_text("the cat sleeps on the mat?").split(),'<unk>',"<pad>",bos="<bos>",eos="<eos>")
-    #tok.save_pretrained("/tmp")
-    #tok = PunctuationTokenizer.from_pretrained("/tmp")
-    tok = WordNetTokenizer('<unk>',"<pad>",bos="<bos>",eos="<eos>")
-    print(tok.tokenize("the cat  sleeps   on the mat and the witch-hunter who had not a typhus fever doesn't care"))
+    tok = PunctuationTokenizer(normalize_text("the cat sleeps on the mat?").split(),'<unk>',"<pad>",bos="<bos>",eos="<eos>")
+    tok.save_pretrained("/tmp")
+    tok = PunctuationTokenizer.from_pretrained("pretrained/zebra")
+    print(tok.tokenize("the boy's cat  sleeps   on the mat and the witch-hunter who had not a typhus fever doesn't care"))
 
+    tok = WordNetTokenizer(__WORDNET__,'<unk>',"<pad>",bos="<bos>",eos="<eos>")
+    print(tok.tokenize("the boy's cat  sleeps   on the mat and the witch-hunter who had not a typhus fever doesn't care"))
 

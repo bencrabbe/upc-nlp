@@ -4,8 +4,10 @@ from torch.utils.data import Dataset
 from pathlib import Path
 import zipfile
 
+__all__ = ['HubUpc','RandomAccessRawText']
 
-__HUB_ROOT__ = os.path.join(Path.home(),'upc_hub')
+
+__HUB_ROOT__ = os.path.join(Path.home(),'upnlp_hub')
 
 
 class HubUpc:
@@ -92,7 +94,6 @@ class HubUpc:
         KwArgs:
            chunk_type (str): either 'datasets' or 'pretrained'
         """
-        print('downloading')
         if chunk_type == 'datasets' and chunk_name not in self.datasets_db:
             raise Exception("Error. this dataset is not available. Use list_datasets() to get an up to date list of available data sets")
 

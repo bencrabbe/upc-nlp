@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+name = "upnlp"
+authors = [
+  { name="Benoit Crabbé", email="benoit.crabbe@u-paris.fr" },
+]
+description = "A package designed to support NLP teaching at graduate level"
+readme = "README.md"
+requires-python = ">=3.12"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GPL-3.0-or-later",
+    "Operating System :: OS Independent",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Scientific/Engineering :: Human Machine Interfaces"
+]
+
+dependencies = ["inflect", "optuna","PyYAML","Requests","torch","tqdm","wn"]
+
+dynamic = ["version"]
+
+[tool.setuptools]
+py-modules = ["lm_models","nlp_datasets","tokenizers"]
+
+[project.urls]
+Homepage = "https://github.com/bencrabbe/upc-nlp"
+Issues = "https://github.com/bencrabbe/upc-nlp/issues"
+
