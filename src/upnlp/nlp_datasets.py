@@ -113,7 +113,6 @@ class HubUpc:
                 dzip.extractall(os.path.join(self.local_hub_root,chunk_type))
             os.remove(localpath)
 
-
             print(f'Files written in {chunk_path}')
 
 

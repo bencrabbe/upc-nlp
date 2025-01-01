@@ -6,9 +6,11 @@ import re
 import wn
 import inflect
 import nlp_datasets
-
+import bpemb
 
 __all__ = ['normalize_text','AutoTokenizer','WordNetTokenizer','PunctuationTokenizer']
+
+__MORPH_GEN__ = inflect.engine()
 
 
 def normalize_text(text):
@@ -24,29 +26,44 @@ def normalize_text(text):
     text = text.translate(translation_map)
     return " ".join(text.split()).lower()
 
+def default_en_wordlist():
+    #downloads a basic English wordlist of 10000 word forms
+    hub  = nlp_datasets.HubUpc()
+    path = os.path.join(hub.get_local_path('datasets/enwords'),'enwordlist.txt')
+    with open(path) as infile:
+        wordlist = infile.read().split()
+    return wordlist
 
-__MORPH_GEN__ = inflect.engine()
+
+
 
 class AutoTokenizer:
     """
     This is a namespace for easy loading of tokenizers defined from this module.
     """
+
     @staticmethod
-    def from_pretrained(path):
+    def from_pretrained(dirpath):
         """
-        Loads a pretrained model from directory.
+        Loads the tokenizer from the model directory
 
         Args:
-            path(path) : path to the model dir (either in the hub or local)
+          dirpath (path or string) : path to the tokenizer params dir
 
         Returns:
-            the pretrained model instance
+          a Tokenizer object
         """
-        hub = nlp_datasets.HubUpc()
-        local_path = hub.get_local_path(path)
-        return PunctuationTokenizer.from_pretrained(local_path)
+        with open(os.path.join(dirpath, 'tokenizer.json')) as infile:
+            ldict = json.loads(infile.read())
+        if ldict['ClassName'] == 'PunctuationTokenizer':
+                return PunctuationTokenizer.from_pretrained(dirpath)
 
+        if ldict['ClassName'] == 'WordNetTokenizer':
+                return WordNetTokenizer.from_pretrained(dirpath)
 
+        if ldict['ClassName'] == 'BpeTokenizer':
+                return BpeTokenizer.from_pretrained(dirpath)
+        raise Exception("There is something wrong. I cannot get the type of the tokenizer")
 
 
 class AbstractTokenizer:
@@ -81,30 +98,6 @@ class AbstractTokenizer:
             vocab_hash.update(word.encode())
         return vocab_hash.hexdigest()
 
-    @staticmethod
-    def from_pretrained(dirpath):
-        """
-        Loads the tokenizer from the model directory
-
-        Args:
-          dirpath (path or string) : path to the tokenizer params dir
-
-        Returns:
-          a DefaultTokenizer object
-        """
-        with open(os.path.join(dirpath, 'tokenizer.json')) as infile:
-            ldict = json.loads(infile.read())
-            if ldict['ClassName'] == 'PunctuationTokenizer':
-                return PunctuationTokenizer(ldict['vocabulary'],unk=ldict['unk'],
-                                                                pad=ldict['pad'],
-                                                                bos=ldict['bos'],
-                                                                eos=ldict['eos'])
-            elif ldict['ClassName'] == 'WordNetTokenizer':
-                return WordNetTokenizer(__WORDNET__,ldict['vocabulary'],
-                                                    unk=ldict['unk'],
-                                                    pad=ldict['pad'],
-                                                    bos=ldict['bos'],
-                                                    eos=ldict['eos'])
 
     def save_pretrained(self,dirpath):
         """
@@ -239,6 +232,102 @@ class AbstractTokenizer:
         return torch.LongTensor(padded_codes)
 
 
+class BpeTokenizer (AbstractTokenizer):
+    """
+    This is a byte pair encoding (bpe) sentence piece tokenizer. It splits sentences into subword units.
+    It wraps the bpemb package @see https://bpemb.h-its.org
+    """
+    def __init__(self,lang='en',vocabulary_size=10000,emb_size=300,pad='<pad>',bos=None,eos=None):
+        """
+        Creates a tokenizer with a vocabulary size and the possibility to output embeddings of some dimension
+
+              Args:
+                lang (str): a language code name
+                vocabulary_size (int): the size of the base vocabulary
+                emb_size (int) : the size of the embeddings
+                pad (str): string for padding tokens
+                eos (str): string for eos token
+                bos (str): string for bos token
+        """
+        super(BpeTokenizer, self).__init__('<unk>',pad,bos,eos)
+        self.bpe = bpemb.BPEmb(lang=lang, vs=vocabulary_size, dim=emb_size)
+
+        def replace_w2v_wf(toreplace,replaceby):
+            idx = self.bpe.emb.key_to_index[toreplace]
+            del self.bpe.emb.key_to_index[toreplace]
+            self.bpe.emb.key_to_index[replaceby] = idx
+            self.bpe.emb.index_to_key[idx] = replaceby
+
+        if bos:
+            self.bpe.BOS_str = bos
+            replace_w2v_wf(self.bpe.BOS_str,bos)
+        if eos:
+            self.bpe.EOS_str = eos
+            replace_w2v_wf(self.bpe.EOS_str, eos)
+
+        self.vocabulary = self.bpe.emb.index_to_key + [pad]
+        self.types2idx = {elt: idx for idx, elt in enumerate(self.vocabulary)}
+
+        self.lang = lang
+        self.vocabulary_size = vocabulary_size
+        self.emb_size   = emb_size
+
+
+    def tokenize(self, string):
+        """
+        Splits a string into tokens
+
+        Args:
+            string (str) : a string to tokenize
+
+        Returns:
+            a list of strings
+        """
+        if self._bos:
+            tokens = [self.bos_token]
+            tokens.extend(self.bpe.encode(string))
+        else:
+            tokens = self.bpe.encode(string)
+        if self._eos:
+            tokens.append(self.eos_token)
+        return tokens
+
+
+    def save_pretrained(self, dirpath):
+        """
+        Saves the tokenizer to model dir.
+
+        Args:
+            dirpath (path or string) : path to the tokenizer params dir
+        """
+        with open(os.path.join(dirpath, 'tokenizer.json'), 'w') as outfile:
+            outfile.write(json.dumps({'pad': self.pad, 'lang':self.lang,'vs':self.vocabulary_size,'es':self.emb_size,
+                                      'bos': self._bos, 'eos': self._eos, 'ClassName': self.__class__.__name__}))
+
+    @staticmethod
+    def from_pretrained(dirpath):
+        """
+        Loads the tokenizer from the model directory
+
+        Args:
+            dirpath (path or string) : path to the tokenizer params dir
+
+            Returns:
+                a BpeTokenizer object
+        """
+        with open(os.path.join(dirpath, 'tokenizer.json')) as infile:
+            ldict = json.loads(infile.read())
+            return BpeTokenizer(lang=ldict['lang'],
+                                vocabulary_size=ldict['vs'],
+                                emb_size=ldict['es'],
+                                pad=ldict['pad'],
+                                bos=ldict['bos'],
+                                eos=ldict['eos'])
+
+
+    def add_tokens(self, tokens):
+        raise NotImplementedError('Attempt to modify the vocabulary of the BpeTokenizer. The vocabulary of this tokenizer cannot be modified.')
+
 
 
 
@@ -248,22 +337,41 @@ class PunctuationTokenizer(AbstractTokenizer):
   Punctuation tokenizer that approximates the HuggingFace tokenizer interface.
   The tokenizer splits the input using punctuation. One may not be able to recover the original input after segmentation
   """
-  def __init__(self, base_vocabulary, unk='<unk>',pad='<pad>',bos=None,eos=None):
+  def __init__(self, base_vocabulary=None, unk='<unk>',pad='<pad>',bos=None,eos=None):
       """
       Creates a tokenizer with some vocabulary and an unknown token
 
       Args:
-        base_vocabulary (list): list of strings
+        base_vocabulary (list): list of strings. If base vocabulary is None, the tokenizer is instanciated with a default list of 10000 word forms
         unk (str): string for unknown tokens
         pad (str): string for padding tokens
         eos (str): string for eos token
         bos (str): string for bos token
       """
-      assert(type(base_vocabulary) == list)
       super(PunctuationTokenizer, self).__init__(unk,pad,bos,eos)
+
+      if base_vocabulary is None:
+          base_vocabulary = default_en_wordlist()
+      assert(type(base_vocabulary) == list)
       self.add_tokens([self.unk,self.pad] + base_vocabulary + [ elt for elt in [bos,eos]  if elt is not None])
 
+  @staticmethod
+  def from_pretrained(dirpath):
+      """
+      Loads the tokenizer from the model directory
 
+      Args:
+        dirpath (path or string) : path to the tokenizer params dir
+
+      Returns:
+        a PunctuationTokenizer object
+      """
+      with open(os.path.join(dirpath, 'tokenizer.json')) as infile:
+          ldict = json.loads(infile.read())
+          return PunctuationTokenizer(ldict['vocabulary'], unk=ldict['unk'],
+                                                           pad=ldict['pad'],
+                                                           bos=ldict['bos'],
+                                                           eos=ldict['eos'])
 
   def tokenize(self, string):
     """
@@ -321,19 +429,34 @@ class WordNetTokenizer(AbstractTokenizer):
         wn.download(wordnet)
         wordnet = wn.Wordnet(wordnet)
 
-        #downloads a basic English wordlist (functional words are generally not in wordnet)
-        hub  = nlp_datasets.HubUpc()
-        path = os.path.join(hub.get_local_path('datasets/enwords'),'enwordlist.txt')
-        with open(path) as infile:
-            wordlist = infile.read().split()
+        wordlist = default_en_wordlist()
 
-        #put the wordnet vocabulary
+        #adds the wordnet vocabulary
         for w in wordnet.words():
             for wf in w.forms():
                 wordlist.extend(all_en_inflections(wf,w.pos))
         self.wordnet = wordnet
         self.add_tokens([self.unk, self.pad] + wordlist + [elt for elt in [bos, eos] if elt is not None])
         self.vocabulary.sort(key=lambda x:len(x),reverse=True) #this is to achieve a longest match effect
+
+    @staticmethod
+    def from_pretrained(dirpath):
+        """
+        Loads the tokenizer from the model directory
+
+        Args:
+            dirpath (path or string) : path to the tokenizer params dir
+
+        Returns:
+            a WordNetTokenizer object
+        """
+        with open(os.path.join(dirpath, 'tokenizer.json')) as infile:
+            ldict = json.loads(infile.read())
+            return WordNetTokenizer(ldict['vocabulary'],
+                                           unk=ldict['unk'],
+                                           pad=ldict['pad'],
+                                           bos=ldict['bos'],
+                                           eos=ldict['eos'])
 
     def tokenize(self, string, include_separators = False,wn_lemmatizer=None):
         """
@@ -384,12 +507,18 @@ class WordNetTokenizer(AbstractTokenizer):
 
 
 if __name__ == '__main__':
+
     #quick how to
-    tok = PunctuationTokenizer(normalize_text("the cat sleeps on the mat?").split(),'<unk>',"<pad>",bos="<bos>",eos="<eos>")
-    tok.save_pretrained("/tmp")
-    tok = PunctuationTokenizer.from_pretrained("pretrained/zebra")
-    print(tok.tokenize("the boy's cat  sleeps   on the mat and the witch-hunter who had not a typhus fever doesn't care"))
+    test_sentence = "the boy's cat  sleeps   on the mat and the witch-hunter who had not a typhus fever doesn't care"
 
-    tok = WordNetTokenizer(__WORDNET__,'<unk>',"<pad>",bos="<bos>",eos="<eos>")
-    print(tok.tokenize("the boy's cat  sleeps   on the mat and the witch-hunter who had not a typhus fever doesn't care"))
+    print('Punctuation')
+    tok = PunctuationTokenizer()
+    print(tok.tokenize(test_sentence))
 
+    print('\nLexical (Wordnet)')
+    tok = WordNetTokenizer()
+    print(tok.tokenize(test_sentence))
+
+    tok = BpeTokenizer()
+    print('\nBPE')
+    print(tok.tokenize(test_sentence))
