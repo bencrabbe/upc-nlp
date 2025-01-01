@@ -1,3 +1,0 @@
-shakespeare.test.txt filter=lfs diff=lfs merge=lfs -text
-shakespeare.train.txt filter=lfs diff=lfs merge=lfs -text
-shakespeare.valid.txt filter=lfs diff=lfs merge=lfs -text
