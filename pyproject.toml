@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Human Machine Interfaces"
 ]
 
-dependencies = ["inflect", "optuna","PyYAML","Requests","torch","tqdm","wn"]
+dependencies = ["inflect", "optuna","PyYAML","Requests","torch","tqdm","wn",'pandas','umap-learn']
 
 #[tool.setuptools]
 #py-modules = ["__init__","lm_models","nlp_datasets","tokenizers"]
