@@ -1,14 +1,14 @@
-import torch
 import json
 import os
 import hashlib
 import re
 import wn
 import inflect
-import nlp_datasets
 import bpemb
+import torch,numpy
+import nlp_datasets
 
-__all__ = ['normalize_text','AutoTokenizer','WordNetTokenizer','PunctuationTokenizer']
+__all__ = ['normalize_text','BpeTokenizer','AutoTokenizer','WordNetTokenizer','PunctuationTokenizer']
 
 __MORPH_GEN__ = inflect.engine()
 
@@ -22,9 +22,10 @@ def normalize_text(text):
     Returns:
          the normalized text
     """
-    translation_map = str.maketrans({'.':' . ','?':' ? ','!':' ! ',',':' , ' })
+    translation_map = str.maketrans({'.':' . ','?':' ? ','!':' ! ',',':' , ','(':' ( ',')':' ) '})
     text = text.translate(translation_map)
     return " ".join(text.split()).lower()
+
 
 def default_en_wordlist():
     #downloads a basic English wordlist of 10000 word forms
@@ -291,6 +292,21 @@ class BpeTokenizer (AbstractTokenizer):
         if self._eos:
             tokens.append(self.eos_token)
         return tokens
+
+    def tokenize_and_lookup(self, string ,device='cpu'):
+        """
+        Splits a string into tokens and maps the tokens to their word embeddings
+
+        Args:
+            string (str) : a string to tokenize
+            device (device): a device where to allocate the tensor
+        Returns:
+            a torch tensor (a matrix)
+        """
+        tokens = self.tokenize(string)
+        vectors = [torch.from_numpy(self.bpe.emb[tok]) for tok in tokens]
+        return torch.stack(vectors).to(device)
+
 
 
     def save_pretrained(self, dirpath):
