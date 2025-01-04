@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "upnlp"
-version = "0.0.10"
+version = "0.0.12"
 authors = [
   { name="Benoit Crabbé", email="benoit.crabbe@u-paris.fr" },
 ]
@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Human Machine Interfaces"
 ]
 
-dependencies = ["inflect", "optuna","PyYAML","Requests","torch","tqdm","wn",'pandas','umap-learn']
+dependencies = ["inflect", "optuna","PyYAML","Requests","torch","tqdm","wn",'pandas','umap-learn','bpemb']
 
 #[tool.setuptools]
 #py-modules = ["__init__","lm_models","nlp_datasets","tokenizers"]
