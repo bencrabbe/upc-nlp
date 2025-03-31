@@ -1,5 +1,4 @@
 import os
-import json
 import torch
 import pprint
 
@@ -13,7 +12,7 @@ from peft import LoraConfig, PeftModel, get_peft_model,prepare_model_for_kbit_tr
 
 
 """
-This illustrates how to fine tune a model of the gemma series (Gemma 1&2 et it)
+This illustrates how to fine tune a model of the gemma series (Gemma 1 & 2 et it)
 @see https://huggingface.co/google/gemma-2b-it
 """
 
@@ -39,13 +38,17 @@ def apply_gemma_template(example,train_mode=True,start='<start_of_turn>',end='<e
 
 
 def format_gemma_prediction(pred_str,start_tag='<start_of_turn>model',end_tag='<end_of_turn>'):
-
+    """
+    Extracts the zebra solution returned by the model as the string between start and end tag
+    """
     start = pred_str.find(start_tag)
     end   = pred_str.find(end_tag,start+1)
 
     if start >= 0 and end >=0 :
         pred_str = pred_str[start+len(start_tag):end]
-    return ' '.join(pred_str.split())#normalizes whitespace
+    return ' '.join(pred_str.split()) #also normalizes whitespace
+
+
 
 def eval_fnc(tokenizer,model,testset,device):
 
@@ -71,21 +74,20 @@ def finetune_and_eval(model_path="params_gemma",train_file=None,valid_file=None,
 
         base_model_id = "google/gemma-2-2b-it"
 
-
-        quantization_config = BitsAndBytesConfig(load_in_4bit=True,
-                                             bnb_4bit_compute_dtype=torch.bfloat16,
-                                             bnb_4bit_quant_type="nf4")
-
-        tokenizer        = AutoTokenizer.from_pretrained(base_model_id)
-        tokenizer.pad_token_id = tokenizer.eos_token_id
-        model            = AutoModelForCausalLM.from_pretrained(base_model_id,
-                                                            torch_dtype=torch.bfloat16,
-                                                            #device_map={"": 0},
-                                                            quantization_config=quantization_config, 
-                                                            attn_implementation='eager').to(device)
-    
         if train_file:
+
             trainset = Dataset.from_json(train_file)
+
+            quantization_config = BitsAndBytesConfig(load_in_4bit=True,
+                                                     bnb_4bit_compute_dtype=torch.bfloat16,
+                                                     bnb_4bit_quant_type="nf4")
+
+            tokenizer        = AutoTokenizer.from_pretrained(base_model_id)
+            tokenizer.pad_token_id = tokenizer.eos_token_id
+            model            = AutoModelForCausalLM.from_pretrained(base_model_id,
+                                                                    torch_dtype=torch.bfloat16,
+                                                                    quantization_config=quantization_config, 
+                                                                    attn_implementation='eager').to(device)
 
             print(tokenizer.apply_chat_template(trainset[0]['messages'],tokenize=False))
 
@@ -95,17 +97,18 @@ def finetune_and_eval(model_path="params_gemma",train_file=None,valid_file=None,
             pprint.pprint(trainset[0])
             print(tokenizer.apply_chat_template(trainset[0]['messages'],tokenize=False))
 
-            #maps data to tensors
+            #maps data to tensors (currently the dataset structure allows us to rely on the default gemma chat template)
             #trainset = trainset.map(apply_gemma_template, fn_kwargs={'train_mode':True})
             #trainset = trainset.map(lambda x : tokenizer(x['prompt']),batched=True).remove_columns('messages')
 
             print(trainset)
 
-            lora_config  = LoraConfig( r=64, #the rank (also impacts memory consumption)
-                                       target_modules="all-linear",
-                                       lora_alpha=64, #the more weight the more the base model is updated
+
+            lora_config  = LoraConfig( r = 64, #the rank (also impacts memory consumption, could use lower ranks (power of 2))
+                                       target_modules="all-linear", #modules that we update
+                                       lora_alpha=64, #the more weight the more the base model is updated (approx equal to rank)
                                        #target_modules=["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
-                                       bias="all",
+                                       bias="all", #set it to none if it overfits
                                        task_type="CAUSAL_LM")
         
             #model.gradient_checkpointing_enable()
@@ -113,17 +116,15 @@ def finetune_and_eval(model_path="params_gemma",train_file=None,valid_file=None,
             model = get_peft_model(model, lora_config)
 
             training_args = SFTConfig(per_device_train_batch_size=batch_size,
-                                  gradient_accumulation_steps=1,
-                                  warmup_steps=100,
-                                  max_steps=max_steps,
-                                  learning_rate=1e-4,
-                                  bf16=True,
-                                  logging_steps=10,
-                                  max_seq_length=max_seq_length,
-                                  #output_dir="model_path",
-                                  optim="paged_adamw_8bit")
+                                      gradient_accumulation_steps=1,
+                                      warmup_steps=100,
+                                      max_steps=max_steps,
+                                      learning_rate=1e-4,
+                                      bf16=True,
+                                      logging_steps=10,
+                                      max_seq_length=max_seq_length,
+                                      optim="paged_adamw_8bit")
 
-    
     
             trainer   = SFTTrainer(model=model,
                                train_dataset=trainset,
@@ -131,9 +132,11 @@ def finetune_and_eval(model_path="params_gemma",train_file=None,valid_file=None,
                                #dataset_text_field="messages",
                                args=training_args,
                                peft_config=lora_config,
+                               #does not update params on the full prompt but only on the completion part 
                                data_collator=trl.DataCollatorForCompletionOnlyLM(response_template='model', tokenizer=tokenizer))
                                #data_collator=transformers.DataCollatorForLanguageModeling(tokenizer, mlm=False))
-    
+
+
             print('\ntraining.')
             trainer.train()
         
@@ -143,12 +146,12 @@ def finetune_and_eval(model_path="params_gemma",train_file=None,valid_file=None,
             trainer.model.save_pretrained(ft_model)
 
 
-            #Merges Lora updates into main model
-            base_model            = AutoModelForCausalLM.from_pretrained(base_model_id,
-                                                                low_cpu_mem_usage=True,
-                                                                torch_dtype=torch.float16,
-                                                                return_dict=True,
-                                                                device_map=device)
+            #Merges Lora updates into the original model
+            base_model= AutoModelForCausalLM.from_pretrained(base_model_id,
+                                                             low_cpu_mem_usage=True,
+                                                             torch_dtype=torch.float16,
+                                                             return_dict=True,
+                                                             device_map=device)
     
             merged_model = PeftModel.from_pretrained(base_model,ft_model)
             merged_model = merged_model.merge_and_unload()
